@@ -1,5 +1,6 @@
 import { Elysia, status, t } from "elysia"
 import { swagger } from '@elysiajs/swagger'
+import { jwt } from '@elysiajs/jwt'
 
 const users = [ // TODO use database instead of hardcoded array
 	{ id: 1, username: "ben", role: "peasant", password: "my-password" , secret: "ben-secret" },
@@ -10,7 +11,36 @@ const users = [ // TODO use database instead of hardcoded array
 ] // STEP 6: ^These secrets are not safe! 
 
 export const app = new Elysia()
+
+	// Set up interactive API docs
 	.use(swagger({path: '/api-docs'}))
+	
+	// Set up JWT with secret key
+	.use(jwt({ 
+		name: 'jwt',
+		secret: 'Pack my box with five dozen liquor jugs'
+	}))
+	
+	// Create new JWT token and store inside secure cookie
+	.get('/sign/:name', async ({ jwt, cookie: { auth }, params }) => {
+		auth.set({
+			value: await jwt.sign(params), // create
+			httpOnly: true, // stores
+			maxAge: 7 * 86400, // 7 days
+			path: '/profile', // cookie is only sent to /profile routes
+		})
+		return `Sign in as ${auth.value}`
+	})
+
+	// Verify token and load profile
+	.get('/profile', async ({ jwt, set, cookie: { auth } }) => {
+		const userProfile = await jwt.verify(auth.value)
+		if (!userProfile) {
+			set.status = 401 
+			return 'Unauthorized'
+		}
+		return `Greetings ${userProfile.name}`
+	})
 
 	// User Authentication -- "who is this request from?"
 	.derive( (request) => {
